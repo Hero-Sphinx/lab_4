@@ -116,7 +116,7 @@ class _MyHomePageState extends State<MyHomePage> {
               Navigator.pop(context);
               _clearCredentials();
             },
-            child: Text('Noo'),
+            child: Text('No'),
           ),
         ],
       ),
