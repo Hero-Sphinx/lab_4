@@ -1,5 +1,7 @@
 import 'package:encrypted_shared_preferences/encrypted_shared_preferences.dart';
 import 'package:flutter/material.dart';
+import 'profile_page.dart';
+import 'user_repository.dart';
 
 void main() {
   runApp(const MyApp());
@@ -8,32 +10,32 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-        // This is the theme of your application.
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
       home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      onGenerateRoute: (settings) {
+        if (settings.name == '/secondPage') {
+          final loginName = settings.arguments as String;
+          return MaterialPageRoute(
+            builder: (context) => ProfilePage(loginName: loginName),
+          );
+        }
+        // Default route
+        return MaterialPageRoute(
+          builder: (context) => const MyHomePage(title: 'Flutter Demo Home Page'),
+        );
+      },
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
   final String title;
 
   @override
@@ -43,86 +45,95 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   TextEditingController loginController = TextEditingController();
   TextEditingController passwordController = TextEditingController();
-
-
-
   String imageSource = 'images/question-mark.png';
-
-
   final EncryptedSharedPreferences data = EncryptedSharedPreferences();
-
 
   @override
   void initState() {
     super.initState();
+    UserRepository.loadData();
     _loadCredentials();
   }
 
   void _loadCredentials() async {
-    String? savedUsername = await data.getString('username');
-    String? savedPassword = await data.getString('password');
+    String savedUsername = await data.getString('username') ?? '';
+    String savedPassword = await data.getString('password') ?? '';
 
-    if (savedUsername != null && savedPassword != null) {
-      setState(() {
-        loginController.text = savedUsername;
-        passwordController.text = savedPassword;
-      });
+    setState(() {
+      loginController.text = savedUsername;
+      passwordController.text = savedPassword;
+    });
+
+    if (savedUsername.isNotEmpty || savedPassword.isNotEmpty) {
       Future.delayed(Duration.zero, () {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Loaded saved credentials!')),
+          const SnackBar(content: Text('Loaded saved credentials!')),
         );
       });
     }
   }
 
-  void _saveCredentials() async {
+  Future<void> _saveCredentials() async {
     await data.setString('username', loginController.text);
     await data.setString('password', passwordController.text);
   }
 
-  void _clearCredentials() async {
+  Future<void> _clearCredentials() async {
     await data.remove('username');
     await data.remove('password');
   }
 
-  // This method is called when the Login button is pressed
   void onPressed() {
-    String password = passwordController.text;
-
+    final password = passwordController.text;
 
     setState(() {
-      if (password == 'QWERTY123') {
-        imageSource = 'images/idea.png';
-      } else {
-        imageSource = 'images/stop.png';
-      }
+      imageSource = (password == 'QWERTY123')
+          ? 'images/idea.png'
+          : 'images/stop.png';
     });
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Save Credentials?'),
-        content: Text('Would you like to save your username and password for next time?'),
+        title: const Text('Save Credentials?'),
+        content: const Text('Would you like to save your login information?'),
         actions: [
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              _saveCredentials();
+              await _saveCredentials();
+              _navigateToProfile();
             },
-            child: Text('Yes'),
+            child: const Text('Yes'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _clearCredentials();
+              _navigateToProfile();
+            },
+            child: const Text('No'),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _clearCredentials();
+              _navigateToProfile();
             },
-            child: Text('No'),
+            child: const Text('Later'),
           ),
         ],
       ),
     );
   }
 
+  void _navigateToProfile() {
+    Navigator.pushNamed(
+      context,
+      '/secondPage',
+      arguments: loginController.text,
+    );
+    // Do NOT show the SnackBar here; show it in ProfilePage instead!
+  }
 
   @override
   void dispose() {
@@ -133,20 +144,9 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
       body: Center(
@@ -155,33 +155,35 @@ class _MyHomePageState extends State<MyHomePage> {
           children: <Widget>[
             TextField(
               controller: loginController,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 hintText: "Login",
                 border: OutlineInputBorder(),
                 labelText: "Login",
               ),
             ),
+            const SizedBox(height: 16),
             TextField(
-              controller: passwordController,obscureText:true,
-              decoration: InputDecoration(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
                 hintText: "Password",
                 border: OutlineInputBorder(),
                 labelText: "Password",
               ),
             ),
+            const SizedBox(height: 24),
             ElevatedButton(
               onPressed: onPressed,
-              child: Text('Login'),
+              child: const Text('Login'),
             ),
-            // Always use the dynamic imageSource here
+            const SizedBox(height: 24),
             Semantics(
-              child: Image.asset(imageSource,width: 300,height: 300),
-              label: "This is a basic image",
+              child: Image.asset(imageSource, width: 300, height: 300),
+              label: "Login status image",
             ),
           ],
         ),
       ),
-      // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
