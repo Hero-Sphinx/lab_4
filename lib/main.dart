@@ -27,7 +27,7 @@ class MyApp extends StatelessWidget {
         }
         // Default route
         return MaterialPageRoute(
-          builder: (context) => const MyHomePage(title: 'Flutter Demo Home Page'),
+          builder: (context) => const MyHomePage(title: 'Flutter Demo-Home Page'),
         );
       },
     );
