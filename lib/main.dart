@@ -1,16 +1,10 @@
 import 'package:flutter/material.dart';
+import 'database_helper.dart';
+import 'list_item.dart';
+import 'list_item_dao.dart';
 
 void main() {
-  runApp(MaterialApp(
-    home: ListPage(),
-  ));
-}
-
-class ListItem {
-  final String name;
-  final String quantity;
-
-  ListItem({required this.name, required this.quantity});
+  runApp(MaterialApp(home: ListPage()));
 }
 
 class ListPage extends StatefulWidget {
@@ -21,16 +15,43 @@ class ListPage extends StatefulWidget {
 class _ListPageState extends State<ListPage> {
   final TextEditingController _itemController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
-  final List<ListItem> _items = [];
 
-  void _addItem() {
+  List<ListItem> _items = [];
+  final ListItemDao _dao = ListItemDao();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadItems();
+  }
+
+  Future _loadItems() async {
+    final items = await _dao.getAllItems();
+    setState(() => _items = items);
+  }
+
+  Future _addItem() async {
     final String name = _itemController.text.trim();
     final String quantity = _quantityController.text.trim();
+
     if (name.isNotEmpty && quantity.isNotEmpty) {
+      ListItem newItem = ListItem(name: name, quantity: quantity);
+      int id = await _dao.insertItem(newItem);
+      newItem.id = id;
       setState(() {
-        _items.add(ListItem(name: name, quantity: quantity));
+        _items.add(newItem);
         _itemController.clear();
         _quantityController.clear();
+      });
+    }
+  }
+
+  Future _deleteItem(int index) async {
+    final item = _items[index];
+    if (item.id != null) {
+      await _dao.deleteItem(item.id!);
+      setState(() {
+        _items.removeAt(index);
       });
     }
   }
@@ -38,23 +59,19 @@ class _ListPageState extends State<ListPage> {
   void _confirmDelete(int index) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (BuildContext context) => AlertDialog(
         title: Text("Delete Item"),
         content: Text("Are you sure you want to delete this item?"),
         actions: [
           TextButton(
             onPressed: () {
-              setState(() {
-                _items.removeAt(index);
-              });
+              _deleteItem(index);
               Navigator.pop(context);
             },
             child: Text("Yes"),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
+            onPressed: () => Navigator.pop(context),
             child: Text("No"),
           ),
         ],
@@ -63,11 +80,19 @@ class _ListPageState extends State<ListPage> {
   }
 
   @override
+  void dispose() {
+    _itemController.dispose();
+    _quantityController.dispose();
+    DatabaseHelper.instance.close();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text("Shopping List")),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: EdgeInsets.all(16),
         child: Column(
           children: [
             Row(
