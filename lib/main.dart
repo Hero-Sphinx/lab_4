@@ -1,185 +1,114 @@
-import 'package:encrypted_shared_preferences/encrypted_shared_preferences.dart';
 import 'package:flutter/material.dart';
-import 'profile_page.dart';
-import 'user_repository.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(MaterialApp(
+    home: ListPage(),
+  ));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class ListItem {
+  final String name;
+  final String quantity;
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-      onGenerateRoute: (settings) {
-        if (settings.name == '/secondPage') {
-          final loginName = settings.arguments as String;
-          return MaterialPageRoute(
-            builder: (context) => ProfilePage(loginName: loginName),
-          );
-        }
-        // Default route
-        return MaterialPageRoute(
-          builder: (context) => const MyHomePage(title: 'Flutter Demo-Home Page'),
-        );
-      },
-    );
-  }
+  ListItem({required this.name, required this.quantity});
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-  final String title;
-
+class ListPage extends StatefulWidget {
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  _ListPageState createState() => _ListPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  TextEditingController loginController = TextEditingController();
-  TextEditingController passwordController = TextEditingController();
-  String imageSource = 'images/question-mark.png';
-  final EncryptedSharedPreferences data = EncryptedSharedPreferences();
+class _ListPageState extends State<ListPage> {
+  final TextEditingController _itemController = TextEditingController();
+  final TextEditingController _quantityController = TextEditingController();
+  final List<ListItem> _items = [];
 
-  @override
-  void initState() {
-    super.initState();
-    UserRepository.loadData();
-    _loadCredentials();
-  }
-
-  void _loadCredentials() async {
-    String savedUsername = await data.getString('username') ?? '';
-    String savedPassword = await data.getString('password') ?? '';
-
-    setState(() {
-      loginController.text = savedUsername;
-      passwordController.text = savedPassword;
-    });
-
-    if (savedUsername.isNotEmpty || savedPassword.isNotEmpty) {
-      Future.delayed(Duration.zero, () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Loaded saved credentials!')),
-        );
+  void _addItem() {
+    final String name = _itemController.text.trim();
+    final String quantity = _quantityController.text.trim();
+    if (name.isNotEmpty && quantity.isNotEmpty) {
+      setState(() {
+        _items.add(ListItem(name: name, quantity: quantity));
+        _itemController.clear();
+        _quantityController.clear();
       });
     }
   }
 
-  Future<void> _saveCredentials() async {
-    await data.setString('username', loginController.text);
-    await data.setString('password', passwordController.text);
-  }
-
-  Future<void> _clearCredentials() async {
-    await data.remove('username');
-    await data.remove('password');
-  }
-
-  void onPressed() {
-    final password = passwordController.text;
-
-    setState(() {
-      imageSource = (password == 'QWERTY123')
-          ? 'images/idea.png'
-          : 'images/stop.png';
-    });
-
+  void _confirmDelete(int index) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Save Credentials?'),
-        content: const Text('Would you like to save your login information?'),
+        title: Text("Delete Item"),
+        content: Text("Are you sure you want to delete this item?"),
         actions: [
           TextButton(
-            onPressed: () async {
+            onPressed: () {
+              setState(() {
+                _items.removeAt(index);
+              });
               Navigator.pop(context);
-              await _saveCredentials();
-              _navigateToProfile();
             },
-            child: const Text('Yes'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _clearCredentials();
-              _navigateToProfile();
-            },
-            child: const Text('No'),
+            child: Text("Yes"),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _navigateToProfile();
             },
-            child: const Text('Later'),
+            child: Text("No"),
           ),
         ],
       ),
     );
   }
 
-  void _navigateToProfile() {
-    Navigator.pushNamed(
-      context,
-      '/secondPage',
-      arguments: loginController.text,
-    );
-    // Do NOT show the SnackBar here; show it in ProfilePage instead!
-  }
-
-  @override
-  void dispose() {
-    loginController.dispose();
-    passwordController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
-      body: Center(
+      appBar: AppBar(title: Text("Shopping List")),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            TextField(
-              controller: loginController,
-              decoration: const InputDecoration(
-                hintText: "Login",
-                border: OutlineInputBorder(),
-                labelText: "Login",
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _itemController,
+                    decoration: InputDecoration(labelText: 'Type the item here'),
+                  ),
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _quantityController,
+                    decoration: InputDecoration(labelText: 'Type the quantity here'),
+                  ),
+                ),
+                SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: _addItem,
+                  child: Text("Click here to Add"),
+                ),
+              ],
+            ),
+            SizedBox(height: 20),
+            Expanded(
+              child: _items.isEmpty
+                  ? Center(child: Text("There are no items in the list"))
+                  : ListView.builder(
+                itemCount: _items.length,
+                itemBuilder: (context, index) {
+                  return GestureDetector(
+                    onLongPress: () => _confirmDelete(index),
+                    child: ListTile(
+                      leading: Text("${index + 1}."),
+                      title: Text(_items[index].name),
+                      trailing: Text("Qty: ${_items[index].quantity}"),
+                    ),
+                  );
+                },
               ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                hintText: "Password",
-                border: OutlineInputBorder(),
-                labelText: "Password",
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: onPressed,
-              child: const Text('Login'),
-            ),
-            const SizedBox(height: 24),
-            Semantics(
-              child: Image.asset(imageSource, width: 300, height: 300),
-              label: "Login status image",
             ),
           ],
         ),
