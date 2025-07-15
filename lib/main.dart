@@ -1,187 +1,143 @@
-import 'package:encrypted_shared_preferences/encrypted_shared_preferences.dart';
 import 'package:flutter/material.dart';
+import 'database_helper.dart';
+import 'list_item.dart';
+import 'list_item_dao.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(MaterialApp(home: ListPage()));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  // This widget is the root of your application.
+class ListPage extends StatefulWidget {
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
-  }
+  _ListPageState createState() => _ListPageState();
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+class _ListPageState extends State<ListPage> {
+  final TextEditingController _itemController = TextEditingController();
+  final TextEditingController _quantityController = TextEditingController();
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  TextEditingController loginController = TextEditingController();
-  TextEditingController passwordController = TextEditingController();
-
-
-
-  String imageSource = 'images/question-mark.png';
-
-
-  final EncryptedSharedPreferences data = EncryptedSharedPreferences();
-
+  List<ListItem> _items = [];
+  final ListItemDao _dao = ListItemDao();
 
   @override
   void initState() {
     super.initState();
-    _loadCredentials();
+    _loadItems();
   }
 
-  void _loadCredentials() async {
-    String? savedUsername = await data.getString('username');
-    String? savedPassword = await data.getString('password');
+  Future _loadItems() async {
+    final items = await _dao.getAllItems();
+    setState(() => _items = items);
+  }
 
-    if (savedUsername != null && savedPassword != null) {
+  Future _addItem() async {
+    final String name = _itemController.text.trim();
+    final String quantity = _quantityController.text.trim();
+
+    if (name.isNotEmpty && quantity.isNotEmpty) {
+      ListItem newItem = ListItem(name: name, quantity: quantity);
+      int id = await _dao.insertItem(newItem);
+      newItem.id = id;
       setState(() {
-        loginController.text = savedUsername;
-        passwordController.text = savedPassword;
-      });
-      Future.delayed(Duration.zero, () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Loaded saved credentials!')),
-        );
+        _items.add(newItem);
+        _itemController.clear();
+        _quantityController.clear();
       });
     }
   }
 
-  void _saveCredentials() async {
-    await data.setString('username', loginController.text);
-    await data.setString('password', passwordController.text);
+  Future _deleteItem(int index) async {
+    final item = _items[index];
+    if (item.id != null) {
+      await _dao.deleteItem(item.id!);
+      setState(() {
+        _items.removeAt(index);
+      });
+    }
   }
 
-  void _clearCredentials() async {
-    await data.remove('username');
-    await data.remove('password');
-  }
-
-  // This method is called when the Login button is pressed
-  void onPressed() {
-    String password = passwordController.text;
-
-
-    setState(() {
-      if (password == 'QWERTY123') {
-        imageSource = 'images/idea.png';
-      } else {
-        imageSource = 'images/stop.png';
-      }
-    });
-
+  void _confirmDelete(int index) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Save Credentials?'),
-        content: Text('Would you like to save your username and password for next time?'),
+      builder: (BuildContext context) => AlertDialog(
+        title: Text("Delete Item"),
+        content: Text("Are you sure you want to delete this item?"),
         actions: [
           TextButton(
             onPressed: () {
+              _deleteItem(index);
               Navigator.pop(context);
-              _saveCredentials();
             },
-            child: Text('Yes'),
+            child: Text("Yes"),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _clearCredentials();
-            },
-            child: Text('No'),
+            onPressed: () => Navigator.pop(context),
+            child: Text("No"),
           ),
         ],
       ),
     );
   }
 
-
   @override
   void dispose() {
-    loginController.dispose();
-    passwordController.dispose();
+    _itemController.dispose();
+    _quantityController.dispose();
+    DatabaseHelper.instance.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
+      appBar: AppBar(title: Text("Shopping List")),
+      body: Padding(
+        padding: EdgeInsets.all(16),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            TextField(
-              controller: loginController,
-              decoration: InputDecoration(
-                hintText: "Login",
-                border: OutlineInputBorder(),
-                labelText: "Login",
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _itemController,
+                    decoration: InputDecoration(labelText: 'Type the item here'),
+                  ),
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _quantityController,
+                    decoration: InputDecoration(labelText: 'Type the quantity here'),
+                  ),
+                ),
+                SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: _addItem,
+                  child: Text("Click here to Add"),
+                ),
+              ],
+            ),
+            SizedBox(height: 20),
+            Expanded(
+              child: _items.isEmpty
+                  ? Center(child: Text("There are no items in the list"))
+                  : ListView.builder(
+                itemCount: _items.length,
+                itemBuilder: (context, index) {
+                  return GestureDetector(
+                    onLongPress: () => _confirmDelete(index),
+                    child: ListTile(
+                      leading: Text("${index + 1}."),
+                      title: Text(_items[index].name),
+                      trailing: Text("Qty: ${_items[index].quantity}"),
+                    ),
+                  );
+                },
               ),
-            ),
-            TextField(
-              controller: passwordController,obscureText:true,
-              decoration: InputDecoration(
-                hintText: "Password",
-                border: OutlineInputBorder(),
-                labelText: "Password",
-              ),
-            ),
-            ElevatedButton(
-              onPressed: onPressed,
-              child: Text('Login'),
-            ),
-            // Always use the dynamic imageSource here
-            Semantics(
-              child: Image.asset(imageSource,width: 300,height: 300),
-              label: "This is a basic image",
             ),
           ],
         ),
       ),
-      // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
