@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'database_helper.dart';
 import 'list_item.dart';
 import 'list_item_dao.dart';
+import 'details_page.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfi;
+
   runApp(MaterialApp(home: ListPage()));
 }
 
@@ -18,6 +23,7 @@ class _ListPageState extends State<ListPage> {
 
   List<ListItem> _items = [];
   final ListItemDao _dao = ListItemDao();
+  ListItem? _selectedItem;
 
   @override
   void initState() {
@@ -46,37 +52,39 @@ class _ListPageState extends State<ListPage> {
     }
   }
 
-  Future _deleteItem(int index) async {
-    final item = _items[index];
-    if (item.id != null) {
-      await _dao.deleteItem(item.id!);
-      setState(() {
-        _items.removeAt(index);
-      });
-    }
-  }
-
-  void _confirmDelete(int index) {
-    showDialog(
+  Future<void> _confirmDelete(ListItem item) async {
+    final confirm = await showDialog<bool>(
       context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: Text("Delete Item"),
-        content: Text("Are you sure you want to delete this item?"),
+      builder: (context) => AlertDialog(
+        title: Text('Confirm Delete'),
+        content: Text('Are you sure you want to delete "${item.name}"?'),
         actions: [
           TextButton(
-            onPressed: () {
-              _deleteItem(index);
-              Navigator.pop(context);
-            },
-            child: Text("Yes"),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Cancel'),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text("No"),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Delete'),
           ),
         ],
       ),
     );
+
+    if (confirm == true) {
+      await _deleteItemByItem(item);
+    }
+  }
+
+  Future _deleteItemByItem(ListItem item) async {
+    if (item.id != null) {
+      await _dao.deleteItem(item.id!);
+      setState(() {
+        _items.remove(item);
+        if (_selectedItem == item) _selectedItem = null;
+      });
+    }
   }
 
   @override
@@ -89,6 +97,8 @@ class _ListPageState extends State<ListPage> {
 
   @override
   Widget build(BuildContext context) {
+    bool isWideScreen = MediaQuery.of(context).size.width > 600;
+
     return Scaffold(
       appBar: AppBar(title: Text("Shopping List")),
       body: Padding(
@@ -100,44 +110,73 @@ class _ListPageState extends State<ListPage> {
                 Expanded(
                   child: TextField(
                     controller: _itemController,
-                    decoration: InputDecoration(labelText: 'Type the item here'),
+                    decoration: InputDecoration(labelText: 'Enter item name'),
                   ),
                 ),
                 SizedBox(width: 10),
                 Expanded(
                   child: TextField(
                     controller: _quantityController,
-                    decoration: InputDecoration(labelText: 'Type the quantity here'),
+                    decoration: InputDecoration(labelText: 'Enter quantity'),
                   ),
                 ),
                 SizedBox(width: 10),
                 ElevatedButton(
                   onPressed: _addItem,
-                  child: Text("Click here to Add"),
+                  child: Text("Add"),
                 ),
               ],
             ),
             SizedBox(height: 20),
             Expanded(
-              child: _items.isEmpty
-                  ? Center(child: Text("There are no items in the list"))
-                  : ListView.builder(
-                itemCount: _items.length,
-                itemBuilder: (context, index) {
-                  return GestureDetector(
-                    onLongPress: () => _confirmDelete(index),
-                    child: ListTile(
-                      leading: Text("${index + 1}."),
-                      title: Text(_items[index].name),
-                      trailing: Text("Qty: ${_items[index].quantity}"),
+              child: isWideScreen
+                  ? Row(
+                children: [
+                  Expanded(child: _buildListView()),
+                  SizedBox(width: 20),
+                  Expanded(
+                    child: _selectedItem == null
+                        ? Center(child: Text("Select an item to see details"))
+                        : DetailsPage(
+                      item: _selectedItem!,
+                      onDelete: () => _confirmDelete(_selectedItem!),
+                      onClose: () => setState(() => _selectedItem = null),
                     ),
-                  );
-                },
+                  ),
+                ],
+              )
+                  : _selectedItem == null
+                  ? _buildListView()
+                  : DetailsPage(
+                item: _selectedItem!,
+                onDelete: () => _confirmDelete(_selectedItem!),
+                onClose: () => setState(() => _selectedItem = null),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildListView() {
+    return _items.isEmpty
+        ? Center(child: Text("There are no items in the list"))
+        : ListView.builder(
+      itemCount: _items.length,
+      itemBuilder: (context, index) {
+        final item = _items[index];
+        return ListTile(
+          onTap: () {
+            setState(() {
+              _selectedItem = item;
+            });
+          },
+          leading: Text("${index + 1}."),
+          title: Text(item.name),
+          trailing: Text("Qty: ${item.quantity}"),
+        );
+      },
     );
   }
 }

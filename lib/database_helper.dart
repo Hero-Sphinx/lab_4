@@ -1,7 +1,7 @@
-import 'package:sqflite/sqflite.dart';
+import 'dart:io';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:io';
+import 'package:sqflite/sqflite.dart';
 import 'list_item.dart';
 
 class DatabaseHelper {
@@ -18,16 +18,24 @@ class DatabaseHelper {
     return _database!;
   }
 
-  Future<Database> _initDB(String filePath) async {
-    Directory documentsDirectory = await getApplicationDocumentsDirectory();
-    String path = join(documentsDirectory.path, filePath);
-
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+  Future<Database> _initDB(String fileName) async {
+    try {
+      Directory documentsDirectory = await getApplicationDocumentsDirectory();
+      final path = join(documentsDirectory.path, fileName);
+      return await openDatabase(
+        path,
+        version: 1,
+        onCreate: _createDB,
+      );
+    } catch (e) {
+      print("Error opening database: $e");
+      rethrow;
+    }
   }
 
   Future _createDB(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE todo(
+      CREATE TABLE todo (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         quantity TEXT NOT NULL
@@ -36,26 +44,24 @@ class DatabaseHelper {
   }
 
   Future<List<ListItem>> getItems() async {
-    final db = await instance.database;
-    final maps = await db.query('todo');
+    final db = await database;
+    final result = await db.query('todo');
 
-    return maps.isNotEmpty
-        ? maps.map((map) => ListItem.fromMap(map)).toList()
-        : [];
+    return result.map((map) => ListItem.fromMap(map)).toList();
   }
 
   Future<int> insertItem(ListItem item) async {
-    final db = await instance.database;
+    final db = await database;
     return await db.insert('todo', item.toMap());
   }
 
   Future<int> deleteItem(int id) async {
-    final db = await instance.database;
+    final db = await database;
     return await db.delete('todo', where: 'id = ?', whereArgs: [id]);
   }
 
   Future close() async {
-    final db = await instance.database;
+    final db = await database;
     db.close();
   }
 }

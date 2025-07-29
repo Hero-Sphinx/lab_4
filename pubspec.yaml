@@ -38,6 +38,7 @@ dependencies:
   url_launcher: ^6.1.7
   cupertino_icons: ^1.0.8
   encrypted_shared_preferences: ^3.0.1
+  sqflite_common_ffi: ^2.3.6
 
 
 dev_dependencies:
